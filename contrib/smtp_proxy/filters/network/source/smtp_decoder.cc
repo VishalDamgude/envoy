@@ -11,13 +11,14 @@ namespace SmtpProxy {
 
 Decoder::Result DecoderImpl::onData(Buffer::Instance& data) {
   const std::string message = data.toString();
+  ENVOY_LOG(debug, "smtp_proxy: received command: ", message);
+  
   std::string command;
   DecodeStatus status = BufferHelper::readStringBySize(data, 4, command);
   if (!status)
   {
-
+    ENVOY_LOG(debug, "smtp_proxy: decoded command: ", command);
   }
-  ENVOY_LOG(debug, "smtp_proxy: received command: ", message);
   // Skip other messages.
   if (StringUtil::trim(message) != BufferHelper::startTlsCommand) {
     return Decoder::Result::ReadyForNext;

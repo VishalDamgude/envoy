@@ -71,8 +71,8 @@ Network::FilterStatus SmtpFilter::onData(Buffer::Instance& data, bool) {
 }
 
 // onWrite method processes payloads sent by upstream to the client.
-Network::FilterStatus SmtpFilter::onWrite(Buffer::Instance&, bool) {
-  return Network::FilterStatus::Continue; //onCommand(buf, false);
+Network::FilterStatus SmtpFilter::onWrite(Buffer::Instance& data, bool) {
+  return doDecode(data); //Network::FilterStatus::Continue; //onCommand(buf, false);
 }
 
 Network::FilterStatus SmtpFilter::doDecode(Buffer::Instance& data) {
