@@ -40,7 +40,7 @@ public:
   SmtpFilterConfig(const SmtpFilterConfigOptions& config_options, Stats::Scope& scope);
   const SmtpProxyStats& stats() { return stats_; }
 
-  bool terminate_ssl_{false};
+  bool terminate_tls_{false};
   Stats::Scope& scope_;
   SmtpProxyStats stats_;
 
@@ -67,7 +67,7 @@ public:
   void initializeWriteFilterCallbacks(Network::WriteFilterCallbacks& callbacks) override {
     write_callbacks_ = &callbacks;
   }
-  void doDecode(Buffer::Instance& buffer);
+  Network::FilterStatus doDecode(Buffer::Instance& buffer);
   DecoderPtr createDecoder(DecoderCallbacks* callbacks);
   SmtpSession& getSession() { return decoder_->getSession(); }
 
@@ -77,7 +77,7 @@ private:
   Network::ReadFilterCallbacks* read_callbacks_{};
   Network::WriteFilterCallbacks* write_callbacks_{};
   // Filter will allow only the following messages to pass.
-  std::string startTlsCommand = "STARTTLS";
+  std::string startTls = "STARTTLS";
 
   SmtpFilterConfigSharedPtr config_;
 

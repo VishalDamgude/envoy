@@ -8,6 +8,8 @@ namespace Extensions {
 namespace NetworkFilters {
 namespace SmtpProxy {
 
+const std::string BufferHelper::startTlsCommand = "STARTTLS";
+
 bool BufferHelper::endOfBuffer(Buffer::Instance& buffer) { return buffer.length() == 0; }
 
 DecodeStatus BufferHelper::skipBytes(Buffer::Instance& buffer, size_t skip_bytes) {
@@ -19,7 +21,7 @@ DecodeStatus BufferHelper::skipBytes(Buffer::Instance& buffer, size_t skip_bytes
 }
 
 DecodeStatus BufferHelper::readString(Buffer::Instance& buffer, std::string& str) {
-  char end = MYSQL_STR_END;
+  char end = SMTP_STR_END;
   ssize_t index = buffer.search(&end, sizeof(end), 0);
   if (index == -1) {
     return DecodeStatus::Failure;

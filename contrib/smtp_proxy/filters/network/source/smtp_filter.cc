@@ -11,7 +11,7 @@ namespace NetworkFilters {
 namespace SmtpProxy {
 
 SmtpFilterConfig::SmtpFilterConfig(const SmtpFilterConfigOptions& config_options, Stats::Scope& scope)
-  : terminate_ssl_(config_options.terminate_ssl_), scope_{scope}, 
+  : terminate_tls_(config_options.terminate_tls_), scope_{scope}, 
     stats_(generateStats(config_options.stats_prefix_, scope)) {
    std::cout << config_options.stats_prefix_ << "\n";
 } 
@@ -29,7 +29,7 @@ Network::FilterStatus SmtpFilter::onCommand(Buffer::Instance& buf) {
   const std::string message = buf.toString();
 
   // Skip other messages.
-  if (StringUtil::trim(message) != startTlsCommand) {
+  if (StringUtil::trim(message) != startTls) {
     return Network::FilterStatus::Continue;
   }
 
@@ -75,15 +75,28 @@ Network::FilterStatus SmtpFilter::onWrite(Buffer::Instance&, bool) {
   return Network::FilterStatus::Continue; //onCommand(buf, false);
 }
 
-void SmtpFilter::doDecode(Buffer::Instance& buffer) {
-try {
-    decoder_->onData(buffer);
-  } catch (EnvoyException& e) {
-    ENVOY_LOG(info, "smtp_proxy: decoding error: {}", e.what());
-    config_->stats_.decoder_errors_.inc();
-    read_buffer_.drain(read_buffer_.length());
-    write_buffer_.drain(write_buffer_.length());
+Network::FilterStatus SmtpFilter::doDecode(Buffer::Instance& data) {
+
+  while (0 < data.length()) {
+    switch (decoder_->onData(data)) {
+    case Decoder::Result::NeedMoreData:
+      return Network::FilterStatus::Continue;
+    case Decoder::Result::ReadyForNext:
+      continue;
+    case Decoder::Result::Stopped:
+      return Network::FilterStatus::StopIteration;
+    }
   }
+  return Network::FilterStatus::Continue;
+// try {
+//     decoder_->onData(buffer);
+//   } catch (EnvoyException& e) {
+//     ENVOY_LOG(info, "smtp_proxy: decoding error: {}", e.what());
+//     config_->stats_.decoder_errors_.inc();
+//     read_buffer_.drain(read_buffer_.length());
+//     write_buffer_.drain(write_buffer_.length());
+//   }
+//   return Network::FilterStatus::Continue;
   
 }
 
