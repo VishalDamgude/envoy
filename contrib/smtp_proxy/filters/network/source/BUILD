@@ -24,6 +24,7 @@ envoy_cc_library(
     ],
     repository = "@envoy",
     deps = [
+        "smtp_decoder_lib",
         "//envoy/network:filter_interface",
         "//envoy/server:filter_config_interface",
         "//envoy/stats:stats_interface",
@@ -31,6 +32,24 @@ envoy_cc_library(
         "//source/common/buffer:buffer_lib",
         "//source/common/network:filter_lib",
         "//source/extensions/filters/network:well_known_names",
+    ],
+)
+
+envoy_cc_library(
+    name = "smtp_decoder_lib",
+    srcs = ["smtp_decoder.cc"],
+    hdrs = ["smtp_decoder.h", "smtp_session.h"],
+    deps = [
+        ":smtp_util_lib",
+    ],
+)
+
+envoy_cc_library(
+    name = "smtp_util_lib",
+    srcs = ["smtp_utils.cc"],
+    hdrs = ["smtp_utils.h"],
+    deps = [
+        "//source/common/buffer:buffer_lib",
     ],
 )
 

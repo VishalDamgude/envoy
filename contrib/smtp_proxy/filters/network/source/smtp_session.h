@@ -29,7 +29,7 @@ public:
 
 private:
   bool in_transaction_{false};
-  SmtpSession::State state_{state::SESSION_INIT};
+  SmtpSession::State state_{State::SESSION_INIT};
 };
 
 } // namespace SmtpProxy
