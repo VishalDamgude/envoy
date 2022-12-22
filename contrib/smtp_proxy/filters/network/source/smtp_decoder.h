@@ -83,7 +83,8 @@ protected:
   Result onDataInSync(Buffer::Instance& data, bool frontend);
   Result onDataIgnore(Buffer::Instance& data, bool frontend);
 
-  bool decode(Buffer::Instance& data);
+  bool parseCommand(Buffer::Instance& data);
+  bool parseResponse (Buffer::Instance& data);
   void parseMessage(Buffer::Instance& message, uint8_t seq, uint32_t len);
 
   DecoderCallbacks* callbacks_{};
