@@ -9,7 +9,7 @@ namespace Extensions {
 namespace NetworkFilters {
 namespace SmtpProxy {
 
-Decoder::Result DecoderImpl::onData(Buffer::Instance& data) {
+Decoder::Result DecoderImpl::onData(Buffer::Instance& data, bool upstream) {
   const std::string message = data.toString();
   ENVOY_LOG(debug, "smtp_proxy: received command: ", message);
 
@@ -19,6 +19,12 @@ Decoder::Result DecoderImpl::onData(Buffer::Instance& data) {
   // {
   //   ENVOY_LOG(debug, "smtp_proxy: decoded command: ", command);
   // }
+  if(upstream)
+  {
+    return parseResponse(data);
+  }
+
+
   Decoder::Result result = Decoder::Result::ReadyForNext;
   switch (session_.getState()) {
     case SmtpSession::State::SESSION_INIT: {
@@ -28,26 +34,11 @@ Decoder::Result DecoderImpl::onData(Buffer::Instance& data) {
       break;
     }
 
-    case SmtpSession::State::SESSION_REQUEST: {
-      if(parseResponse(data) == DecodeStatus::Success) {
-        session_.setState(SmtpSession::State::SESSION_IN_PROGRESS);
-      }
-      break;
-    }
     case SmtpSession::State::SESSION_IN_PROGRESS: {
       result = parseCommand(data);
       break;
     }
-    case SmtpSession::State::SESSION_COMPLETED: {
-      break;
-    }
     case SmtpSession::State::SESSION_TERMINATED: {
-      break;
-    }
-    case SmtpSession::State::TRANSACTION_REQUEST: {
-      if(parseResponse(data) == DecodeStatus::Success) {
-        session_.setState(SmtpSession::State::TRANSACTION_IN_PROGRESS);
-      }
       break;
     }
     case SmtpSession::State::TRANSACTION_IN_PROGRESS: {
@@ -80,18 +71,26 @@ Decoder::Result DecoderImpl::parseCommand(Buffer::Instance& data) {
   ENVOY_LOG(trace, "smtp_proxy: decoding {} bytes", data.length());
 
   std::string command;
+  Buffer::OwnedImpl buf;
+  data.copyOut(0, data.length(), &buf);
   if(session_.getState() == SmtpSession::State::SESSION_IN_PROGRESS)
   {
     if(data.startsWith(BufferHelper::startTlsCommand))
     {
       if(!callbacks_->onStartTlsCommand(data)) {
-        // callback return false if connection is switched to tls i.e. tls termination is successful.
+        // callback returns false if connection is switched to tls i.e. tls termination is successful.
         //session_.setState(SmtpSession::State::SESSION_ENCRYPTED);
         return Decoder::Result::Stopped;
       } else {
         return Decoder::Result::ReadyForNext;
       }
+    } else {
+      DecodeStatus status = BufferHelper::readStringBySize(data, 4, command);
+      if (command == "MAIL") {
+        session_.setState(SmtpSession::State::TRANSACTION_REQUEST);
+      }
     }
+
   }
   DecodeStatus status = BufferHelper::readStringBySize(data, 4, command);
   if (!status)
@@ -100,36 +99,47 @@ Decoder::Result DecoderImpl::parseCommand(Buffer::Instance& data) {
     if( command == "EHLO")
     {
       session_.setState(SmtpSession::State::SESSION_REQUEST);
-    } else if (command == "MAIL") {
-      session_.setState(SmtpSession::State::TRANSACTION_REQUEST);
     }
   }
-  // if (session_.getState() == SmtpSession::State::STARTTLS_REQ_RECEIVED)
-  // {
-  //   ENVOY_LOG(debug, "smtp_proxy: current_state: ", session_.getState());
-  // }
-
-  // 
-  //data.drain(data.length());
-  return DecodeStatus::Success;
+  return Decoder::Result::ReadyForNext;
 }
 
 
-bool DecoderImpl::parseResponse(Buffer::Instance& data) {
-  ENVOY_LOG(trace, "smtp_proxy: decoding {} bytes", data.length());
+Decoder::Result DecoderImpl::parseResponse(Buffer::Instance& data) {
+  ENVOY_LOG(trace, "smtp_proxy: decoding response {} bytes", data.length());
 
   uint32_t response_code;
+  Decoder::Result result = Decoder::Result::ReadyForNext;
+
   if (BufferHelper::readUint24(data, response_code) != DecodeStatus::Success) {
 
-    ENVOY_LOG(debug, "error when parsing response code");
-    return DecodeStatus::Failure;
+    ENVOY_LOG(debug, "error parsing response code");
+    // return DecodeStatus::Failure;
+    result = Decoder::Result::ReadyForNext;
+    return result;
   }
 
-  if( response_code >= 200 && response_code <= 299)
-  {
-    return DecodeStatus::Success;
-  }  
-  return DecodeStatus::Success;
+  switch (session_.getState()) {
+
+    case SmtpSession::State::SESSION_REQUEST: {
+      if(response_code >= 200 && response_code <= 299) {
+        session_.setState(SmtpSession::State::SESSION_IN_PROGRESS);
+      }
+      break;
+    }
+
+    case SmtpSession::State::TRANSACTION_REQUEST: {
+      if(response_code >= 200 && response_code <= 299) {
+        session_.setState(SmtpSession::State::TRANSACTION_IN_PROGRESS);
+      }
+      break;
+    }
+    default:
+      return Decoder::Result::ReadyForNext;
+  }
+
+  data.drain(data.length());
+  return result;
 }
 
 } // namespace SmtpProxy

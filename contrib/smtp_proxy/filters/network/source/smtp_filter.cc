@@ -104,7 +104,7 @@ Network::FilterStatus SmtpFilter::onData(Buffer::Instance& data, bool) {
                  data.length());
   read_buffer_.add(data);
   // return onCommand(buf);
-  Network::FilterStatus result = doDecode(read_buffer_);
+  Network::FilterStatus result = doDecode(read_buffer_, false);
   if (result == Network::FilterStatus::StopIteration) {
     ASSERT(read_buffer_.length() == 0);
     data.drain(data.length());
@@ -114,13 +114,14 @@ Network::FilterStatus SmtpFilter::onData(Buffer::Instance& data, bool) {
 
 // onWrite method processes payloads sent by upstream to the client.
 Network::FilterStatus SmtpFilter::onWrite(Buffer::Instance& data, bool) {
-  return doDecode(data); //Network::FilterStatus::Continue; //onCommand(buf, false);
-}
+  //Network::FilterStatus::Continue; //onCommand(buf, false);
+  return doDecode(data, true); 
+  }
 
-Network::FilterStatus SmtpFilter::doDecode(Buffer::Instance& data) {
+Network::FilterStatus SmtpFilter::doDecode(Buffer::Instance& data, bool upstream) {
 
   while (0 < data.length()) {
-    switch (decoder_->onData(data)) {
+    switch (decoder_->onData(data, upstream)) {
     case Decoder::Result::NeedMoreData:
       return Network::FilterStatus::Continue;
     case Decoder::Result::ReadyForNext:
