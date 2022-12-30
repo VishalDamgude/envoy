@@ -22,7 +22,9 @@ public:
 //   virtual void incMessagesFrontend() PURE;
 //   virtual void incMessagesUnknown() PURE;
 
-  // virtual void incSessionsEncrypted() PURE;
+  virtual void incTlsTerminatedSessions() PURE;
+  virtual void incSmtpTransactions() PURE;
+  virtual void incSmtpSessions() PURE;
   // virtual void incSessionsUnencrypted() PURE;
 
 //   enum class StatementType { Insert, Delete, Select, Update, Other, Noop };
@@ -40,7 +42,7 @@ public:
 
   // virtual void processQuery(const std::string&) PURE;
 
-  // virtual bool onSSLRequest() PURE;
+  virtual bool onStartTlsCommand(Buffer::Instance& buf) PURE;
 };
 
 // SMTP message decoder.
@@ -79,11 +81,7 @@ public:
 
 protected:
 
-  Result onDataInit(Buffer::Instance& data, bool frontend);
-  Result onDataInSync(Buffer::Instance& data, bool frontend);
-  Result onDataIgnore(Buffer::Instance& data, bool frontend);
-
-  bool parseCommand(Buffer::Instance& data);
+  Decoder::Result parseCommand(Buffer::Instance& data);
   bool parseResponse (Buffer::Instance& data);
   void parseMessage(Buffer::Instance& message, uint8_t seq, uint32_t len);
 

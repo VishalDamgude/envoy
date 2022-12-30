@@ -21,4 +21,5 @@ message SmtpProxy {
     // The human readable prefix to use when emitting :ref:`statistics
     // <config_network_filters_smtp_proxy_stats>`.
     string stat_prefix = 1 [(validate.rules).string = {min_len: 1}];
+    bool terminate_tls = 2;
 }
