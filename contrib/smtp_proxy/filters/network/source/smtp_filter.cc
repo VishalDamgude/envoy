@@ -25,25 +25,25 @@ Network::FilterStatus SmtpFilter::onNewConnection() {
   return Network::FilterStatus::Continue;
 }
 
-Network::FilterStatus SmtpFilter::onCommand(Buffer::Instance& buf) {
-  const std::string message = buf.toString();
+bool SmtpFilter::onStartTlsCommand(Buffer::Instance& buf) {
 
-  // Skip other messages.
-  if (StringUtil::trim(message) != startTls) {
-    return Network::FilterStatus::Continue;
+  if(!config_->terminate_tls_) {
+    // Signal to the decoder to continue.
+    return true;
   }
-
   read_callbacks_->connection().addBytesSentCallback([=](uint64_t bytes) -> bool {
     // Wait until 6 bytes long "220 OK" has been sent.
     if (bytes >= 6) {
       if (!read_callbacks_->connection().startSecureTransport()) {
-        // TODO: switch to Logs
-        std::cout << "cannot switch to tls\n";
+        ENVOY_CONN_LOG(trace, "smtp_proxy filter: cannot switch to tls", read_callbacks_->connection(), bytes);
       }
 
-      // Unsubscribe the callback.
-      // Switch to tls has been completed.
-      std::cout << "[SMTP_FILTER] Switched to tls\n";
+      // Switch to TLS has been completed.
+      // Signal to the decoder to stop processing the current message (SSLRequest).
+      // Because Envoy terminates SSL, the message was consumed and should not be
+      // passed to other filters in the chain.
+      incTlsTerminatedSessions();
+      ENVOY_CONN_LOG(trace, "smtp_proxy filter: switched to tls", read_callbacks_->connection(), bytes);
       return false;
     }
     return true;
@@ -53,8 +53,50 @@ Network::FilterStatus SmtpFilter::onCommand(Buffer::Instance& buf) {
   buf.add("220 OK\n");
 
   read_callbacks_->connection().write(buf, false);
-  return Network::FilterStatus::StopIteration;
+  return false;
 }
+
+void SmtpFilter::incTlsTerminatedSessions() {
+  config_->stats_.tls_terminated_sessions_.inc();
+}
+void SmtpFilter::incSmtpTransactions() {
+  config_->stats_.smtp_transactions_.inc();
+}
+
+void SmtpFilter::incSmtpSessions() {
+  config_->stats_.smtp_sessions_.inc();
+  
+}
+// Network::FilterStatus SmtpFilter::onCommand(Buffer::Instance& buf) {
+//   const std::string message = buf.toString();
+
+//   // Skip other messages.
+//   if (StringUtil::trim(message) != startTls) {
+//     return Network::FilterStatus::Continue;
+//   }
+
+//   read_callbacks_->connection().addBytesSentCallback([=](uint64_t bytes) -> bool {
+//     // Wait until 6 bytes long "220 OK" has been sent.
+//     if (bytes >= 6) {
+//       if (!read_callbacks_->connection().startSecureTransport()) {
+//         // TODO: switch to Logs
+//         std::cout << "cannot switch to tls\n";
+//       }
+
+//       // Unsubscribe the callback.
+//       // Switch to tls has been completed.
+//       std::cout << "[SMTP_FILTER] Switched to tls\n";
+//       return false;
+//     }
+//     return true;
+//   });
+
+//   buf.drain(buf.length());
+//   buf.add("220 OK\n");
+
+//   read_callbacks_->connection().write(buf, false);
+//   return Network::FilterStatus::StopIteration;
+// }
 
 // onData method processes payloads sent by downstream client.
 Network::FilterStatus SmtpFilter::onData(Buffer::Instance& data, bool) {

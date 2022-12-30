@@ -19,6 +19,49 @@ DecodeStatus BufferHelper::skipBytes(Buffer::Instance& buffer, size_t skip_bytes
   buffer.drain(skip_bytes);
   return DecodeStatus::Success;
 }
+DecodeStatus BufferHelper::readUint8(Buffer::Instance& buffer, uint8_t& val) {
+  try {
+    val = buffer.peekLEInt<uint8_t>(0);
+    buffer.drain(sizeof(uint8_t));
+    return DecodeStatus::Success;
+  } catch (EnvoyException& e) {
+    // buffer underflow
+    return DecodeStatus::Failure;
+  }
+}
+
+DecodeStatus BufferHelper::readUint16(Buffer::Instance& buffer, uint16_t& val) {
+  try {
+    val = buffer.peekLEInt<uint16_t>(0);
+    buffer.drain(sizeof(uint16_t));
+    return DecodeStatus::Success;
+  } catch (EnvoyException& e) {
+    // buffer underflow
+    return DecodeStatus::Failure;
+  }
+}
+
+DecodeStatus BufferHelper::readUint24(Buffer::Instance& buffer, uint32_t& val) {
+  try {
+    val = buffer.peekLEInt<uint32_t, sizeof(uint8_t) * 3>(0);
+    buffer.drain(sizeof(uint8_t) * 3);
+    return DecodeStatus::Success;
+  } catch (EnvoyException& e) {
+    // buffer underflow
+    return DecodeStatus::Failure;
+  }
+}
+
+DecodeStatus BufferHelper::readUint32(Buffer::Instance& buffer, uint32_t& val) {
+  try {
+    val = buffer.peekLEInt<uint32_t>(0);
+    buffer.drain(sizeof(uint32_t));
+    return DecodeStatus::Success;
+  } catch (EnvoyException& e) {
+    // buffer underflow
+    return DecodeStatus::Failure;
+  }
+}
 
 DecodeStatus BufferHelper::readString(Buffer::Instance& buffer, std::string& str) {
   char end = SMTP_STR_END;

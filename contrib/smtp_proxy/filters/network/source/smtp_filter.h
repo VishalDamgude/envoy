@@ -4,7 +4,7 @@
 #include "envoy/stats/scope.h"
 #include "envoy/stats/stats.h"
 #include "envoy/stats/stats_macros.h"
-
+#include "source/common/common/logger.h"
 #include "source/common/common/utility.h"
 #include "contrib/smtp_proxy/filters/network/source/smtp_decoder.h"
 
@@ -17,8 +17,8 @@ namespace SmtpProxy {
  * All SMTP proxy stats. @see stats_macros.h
  */
 #define ALL_SMTP_PROXY_STATS(COUNTER)                                                             \
-  COUNTER(sessions)                                                                               \
-  COUNTER(mail_transactions)                                                                      \
+  COUNTER(smtp_sessions)                                                                               \
+  COUNTER(smtp_transactions)                                                                      \
   COUNTER(tls_terminated_sessions)																	                              \
   COUNTER(decoder_errors)																	                              \
 
@@ -70,6 +70,11 @@ public:
   Network::FilterStatus doDecode(Buffer::Instance& buffer);
   DecoderPtr createDecoder(DecoderCallbacks* callbacks);
   SmtpSession& getSession() { return decoder_->getSession(); }
+
+  bool onStartTlsCommand(Buffer::Instance& buf) override;
+  void incTlsTerminatedSessions() override;
+  void incSmtpTransactions() override;
+  void incSmtpSessions() override;
 
 private:
   Network::FilterStatus onCommand(Buffer::Instance& buf);

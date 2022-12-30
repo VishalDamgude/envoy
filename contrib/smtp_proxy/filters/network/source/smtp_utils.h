@@ -27,6 +27,10 @@ public:
   static const std::string startTlsCommand;
   static bool endOfBuffer(Buffer::Instance& buffer);
   static DecodeStatus skipBytes(Buffer::Instance& buffer, size_t skip_bytes);
+  static DecodeStatus readUint8(Buffer::Instance& buffer, uint8_t& val);
+  static DecodeStatus readUint16(Buffer::Instance& buffer, uint16_t& val);
+  static DecodeStatus readUint24(Buffer::Instance& buffer, uint32_t& val);
+  static DecodeStatus readUint32(Buffer::Instance& buffer, uint32_t& val);
   static DecodeStatus readString(Buffer::Instance& buffer, std::string& str);
   static DecodeStatus readStringBySize(Buffer::Instance& buffer, size_t len, std::string& str);
 };
