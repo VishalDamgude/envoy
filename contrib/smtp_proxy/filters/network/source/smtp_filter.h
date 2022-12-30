@@ -67,7 +67,7 @@ public:
   void initializeWriteFilterCallbacks(Network::WriteFilterCallbacks& callbacks) override {
     write_callbacks_ = &callbacks;
   }
-  Network::FilterStatus doDecode(Buffer::Instance& buffer);
+  Network::FilterStatus doDecode(Buffer::Instance& buffer, bool upstream);
   DecoderPtr createDecoder(DecoderCallbacks* callbacks);
   SmtpSession& getSession() { return decoder_->getSession(); }
 

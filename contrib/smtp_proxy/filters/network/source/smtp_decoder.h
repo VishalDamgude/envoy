@@ -59,7 +59,8 @@ public:
             // data. This happens when decoder wants filter to perform some action, for example to
             // call starttls transport socket to enable TLS.
   };
-  virtual Result onData(Buffer::Instance& data) PURE;
+  virtual Result onData(Buffer::Instance& data, bool) PURE;
+  //virtual Result parseResponse(Buffer::Instance& data) PURE;
   virtual SmtpSession& getSession() PURE;
 
 
@@ -71,7 +72,8 @@ class DecoderImpl : public Decoder, Logger::Loggable<Logger::Id::filter> {
 public:
   DecoderImpl(DecoderCallbacks* callbacks) : callbacks_(callbacks) { }
 
-  Result onData(Buffer::Instance& data) override;
+  Result onData(Buffer::Instance& data, bool upstream) override;
+  //Result parseResponse (Buffer::Instance& data) override;
   SmtpSession& getSession() override { return session_; }
 
   std::string getMessage() { return message_; }
@@ -82,7 +84,7 @@ public:
 protected:
 
   Decoder::Result parseCommand(Buffer::Instance& data);
-  bool parseResponse (Buffer::Instance& data);
+  Decoder::Result parseResponse (Buffer::Instance& data);
   void parseMessage(Buffer::Instance& message, uint8_t seq, uint32_t len);
 
   DecoderCallbacks* callbacks_{};
