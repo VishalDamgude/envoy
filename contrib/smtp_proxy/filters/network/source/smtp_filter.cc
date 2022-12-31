@@ -25,12 +25,15 @@ Network::FilterStatus SmtpFilter::onNewConnection() {
   return Network::FilterStatus::Continue;
 }
 
-bool SmtpFilter::onStartTlsCommand(Buffer::Instance& buf) {
+bool SmtpFilter::onStartTlsCommand() {
 
   if(!config_->terminate_tls_) {
     // Signal to the decoder to continue.
     return true;
   }
+  Buffer::OwnedImpl buffer;
+  buffer.add("220 OK\n");
+  
   read_callbacks_->connection().addBytesSentCallback([=](uint64_t bytes) -> bool {
     // Wait until 6 bytes long "220 OK" has been sent.
     if (bytes >= 6) {
@@ -49,10 +52,26 @@ bool SmtpFilter::onStartTlsCommand(Buffer::Instance& buf) {
     return true;
   });
 
-  buf.drain(buf.length());
-  buf.add("220 OK\n");
+  read_callbacks_->connection().write(buffer, false);
+  return false;
+}
 
-  read_callbacks_->connection().write(buf, false);
+bool SmtpFilter::rejectOutOfOrderCommand() {
+  Buffer::OwnedImpl buffer;
+  buffer.add("503 Bad sequence of commands\n");
+  if (read_callbacks_->connection().state() != Network::Connection::State::Open) {
+    ENVOY_LOG(warn, "downstream connection is closed or closing");
+    return true;
+  }
+  read_callbacks_->connection().addBytesSentCallback([=](uint64_t bytes) -> bool {
+    // Wait until 28 bytes long "503 Bad sequence of commands" has been sent.
+    if (bytes >= 28) {
+      return false;
+    }
+    return true;
+  });
+
+  read_callbacks_->connection().write(buffer, false);
   return false;
 }
 
@@ -63,47 +82,19 @@ void SmtpFilter::incSmtpTransactions() {
   config_->stats_.smtp_transactions_.inc();
 }
 
+void SmtpFilter::incSmtpTransactionsAborted() {
+  config_->stats_.smtp_transactions_aborted_.inc();
+}
 void SmtpFilter::incSmtpSessions() {
   config_->stats_.smtp_sessions_.inc();
   
 }
-// Network::FilterStatus SmtpFilter::onCommand(Buffer::Instance& buf) {
-//   const std::string message = buf.toString();
-
-//   // Skip other messages.
-//   if (StringUtil::trim(message) != startTls) {
-//     return Network::FilterStatus::Continue;
-//   }
-
-//   read_callbacks_->connection().addBytesSentCallback([=](uint64_t bytes) -> bool {
-//     // Wait until 6 bytes long "220 OK" has been sent.
-//     if (bytes >= 6) {
-//       if (!read_callbacks_->connection().startSecureTransport()) {
-//         // TODO: switch to Logs
-//         std::cout << "cannot switch to tls\n";
-//       }
-
-//       // Unsubscribe the callback.
-//       // Switch to tls has been completed.
-//       std::cout << "[SMTP_FILTER] Switched to tls\n";
-//       return false;
-//     }
-//     return true;
-//   });
-
-//   buf.drain(buf.length());
-//   buf.add("220 OK\n");
-
-//   read_callbacks_->connection().write(buf, false);
-//   return Network::FilterStatus::StopIteration;
-// }
 
 // onData method processes payloads sent by downstream client.
-Network::FilterStatus SmtpFilter::onData(Buffer::Instance& data, bool) {
+Network::FilterStatus SmtpFilter::onData(Buffer::Instance& data, bool end_stream) {
   ENVOY_CONN_LOG(trace, "smtp_proxy: got {} bytes", read_callbacks_->connection(),
-                 data.length());
+                 data.length(), "end_stream ", end_stream);
   read_buffer_.add(data);
-  // return onCommand(buf);
   Network::FilterStatus result = doDecode(read_buffer_, false);
   if (result == Network::FilterStatus::StopIteration) {
     ASSERT(read_buffer_.length() == 0);
@@ -113,33 +104,27 @@ Network::FilterStatus SmtpFilter::onData(Buffer::Instance& data, bool) {
 }
 
 // onWrite method processes payloads sent by upstream to the client.
-Network::FilterStatus SmtpFilter::onWrite(Buffer::Instance& data, bool) {
-  //Network::FilterStatus::Continue; //onCommand(buf, false);
-  return doDecode(data, true); 
+Network::FilterStatus SmtpFilter::onWrite(Buffer::Instance& data, bool end_stream) {
+  ENVOY_CONN_LOG(trace, "smtp_proxy: got {} bytes", write_callbacks_->connection(),
+                 data.length(), "end_stream ", end_stream);
+  write_buffer_.add(data);
+  Network::FilterStatus result =  doDecode(write_buffer_, true);
+  if (result == Network::FilterStatus::StopIteration) {
+    ASSERT(write_buffer_.length() == 0);
+    data.drain(data.length());
+  }
+  return result;
   }
 
 Network::FilterStatus SmtpFilter::doDecode(Buffer::Instance& data, bool upstream) {
 
-  while (0 < data.length()) {
-    switch (decoder_->onData(data, upstream)) {
-    case Decoder::Result::NeedMoreData:
-      return Network::FilterStatus::Continue;
+  switch (decoder_->onData(data, upstream)) {
     case Decoder::Result::ReadyForNext:
-      continue;
+      return Network::FilterStatus::Continue;
     case Decoder::Result::Stopped:
       return Network::FilterStatus::StopIteration;
-    }
   }
   return Network::FilterStatus::Continue;
-// try {
-//     decoder_->onData(buffer);
-//   } catch (EnvoyException& e) {
-//     ENVOY_LOG(info, "smtp_proxy: decoding error: {}", e.what());
-//     config_->stats_.decoder_errors_.inc();
-//     read_buffer_.drain(read_buffer_.length());
-//     write_buffer_.drain(write_buffer_.length());
-//   }
-//   return Network::FilterStatus::Continue;
   
 }
 

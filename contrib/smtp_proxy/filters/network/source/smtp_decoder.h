@@ -24,6 +24,7 @@ public:
 
   virtual void incTlsTerminatedSessions() PURE;
   virtual void incSmtpTransactions() PURE;
+  virtual void incSmtpTransactionsAborted() PURE;
   virtual void incSmtpSessions() PURE;
   // virtual void incSessionsUnencrypted() PURE;
 
@@ -42,7 +43,9 @@ public:
 
   // virtual void processQuery(const std::string&) PURE;
 
-  virtual bool onStartTlsCommand(Buffer::Instance& buf) PURE;
+  virtual bool onStartTlsCommand() PURE;
+  virtual bool rejectOutOfOrderCommand() PURE;
+
 };
 
 // SMTP message decoder.
@@ -54,11 +57,11 @@ public:
   // passes bytes of data via onData method:
   enum class Result {
     ReadyForNext, // Decoder processed previous message and is ready for the next message.
-    NeedMoreData, // Decoder needs more data to reconstruct the message.
     Stopped // Received and processed message disrupts the current flow. Decoder stopped accepting
             // data. This happens when decoder wants filter to perform some action, for example to
             // call starttls transport socket to enable TLS.
   };
+  
   virtual Result onData(Buffer::Instance& data, bool) PURE;
   //virtual Result parseResponse(Buffer::Instance& data) PURE;
   virtual SmtpSession& getSession() PURE;
@@ -78,9 +81,24 @@ public:
 
   std::string getMessage() { return message_; }
 
-  bool encrypted() const { return encrypted_; }
+  bool isSessionEncrypted() const { return session_encrypted_; }
 
-
+  const char *StateStrings[14] = {
+      "SESSION_INIT",
+      "SESSION_REQUEST",
+      "SESSION_IN_PROGRESS",
+      "SESSION_TERMINATION_REQUEST",
+      "SESSION_TERMINATED",
+      "TRANSACTION_REQUEST",
+      "TRANSACTION_IN_PROGRESS",
+      "TRANSACTION_ABORT_REQUEST",
+      "TRANSACTION_ABORTED",
+      "END_OF_MAIL_INDICATION_RECEIVECD",
+      "TRANSACTION_COMPLETED",
+      "STARTTLS_REQ_RECEIVED",
+      "SESSION_ENCRYPTED",
+      "ERROR"
+  };
 protected:
 
   Decoder::Result parseCommand(Buffer::Instance& data);
@@ -95,7 +113,7 @@ protected:
    std::string message_;
    uint32_t message_len_{};
 
-  bool encrypted_{false}; // tells if exchange is encrypted
+  bool session_encrypted_{false}; // tells if exchange is encrypted
 
 };
 

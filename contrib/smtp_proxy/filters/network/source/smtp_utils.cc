@@ -44,6 +44,8 @@ DecodeStatus BufferHelper::readUint16(Buffer::Instance& buffer, uint16_t& val) {
 DecodeStatus BufferHelper::readUint24(Buffer::Instance& buffer, uint32_t& val) {
   try {
     val = buffer.peekLEInt<uint32_t, sizeof(uint8_t) * 3>(0);
+    // val = buffer.peekBEInt<uint32_t, sizeof(uint8_t) * 3>(0);
+    std::cout<< "response code 3 bytes: " << val << "\n";
     buffer.drain(sizeof(uint8_t) * 3);
     return DecodeStatus::Success;
   } catch (EnvoyException& e) {

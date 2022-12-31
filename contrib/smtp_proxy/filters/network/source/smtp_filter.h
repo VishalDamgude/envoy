@@ -17,10 +17,11 @@ namespace SmtpProxy {
  * All SMTP proxy stats. @see stats_macros.h
  */
 #define ALL_SMTP_PROXY_STATS(COUNTER)                                                             \
-  COUNTER(smtp_sessions)                                                                               \
+  COUNTER(smtp_sessions)                                                                          \
   COUNTER(smtp_transactions)                                                                      \
+  COUNTER(smtp_transactions_aborted)                                                                      \
   COUNTER(tls_terminated_sessions)																	                              \
-  COUNTER(decoder_errors)																	                              \
+  COUNTER(decoder_errors)																	                                        \
 
 
 /**
@@ -71,9 +72,11 @@ public:
   DecoderPtr createDecoder(DecoderCallbacks* callbacks);
   SmtpSession& getSession() { return decoder_->getSession(); }
 
-  bool onStartTlsCommand(Buffer::Instance& buf) override;
+  bool onStartTlsCommand() override;
+  bool rejectOutOfOrderCommand() override;
   void incTlsTerminatedSessions() override;
   void incSmtpTransactions() override;
+  void incSmtpTransactionsAborted() override;
   void incSmtpSessions() override;
 
 private:
