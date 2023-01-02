@@ -16,6 +16,7 @@ NetworkFilters::SmtpProxy::SmtpConfigFactory::createFilterFactoryFromProtoTyped(
 
   SmtpFilterConfig::SmtpFilterConfigOptions config_options;
   config_options.stats_prefix_ = fmt::format("smtp.{}", proto_config.stat_prefix());
+  config_options.terminate_tls_ = proto_config.terminate_tls();
  
   SmtpFilterConfigSharedPtr filter_config(
       std::make_shared<SmtpFilterConfig>(config_options, context.scope()));

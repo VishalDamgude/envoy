@@ -22,32 +22,29 @@ SmtpFilter::SmtpFilter(SmtpFilterConfigSharedPtr config) : config_{config} {
 }
 
 Network::FilterStatus SmtpFilter::onNewConnection() {
+  incSmtpSessionRequests();
   return Network::FilterStatus::Continue;
 }
 
-bool SmtpFilter::onStartTlsCommand() {
+bool SmtpFilter::onStartTlsCommand(absl::string_view response) {
 
-  if(!config_->terminate_tls_) {
-    // Signal to the decoder to continue.
-    return true;
-  }
   Buffer::OwnedImpl buffer;
-  buffer.add("220 OK\n");
+  buffer.add(response);
   
   read_callbacks_->connection().addBytesSentCallback([=](uint64_t bytes) -> bool {
     // Wait until 6 bytes long "220 OK" has been sent.
-    if (bytes >= 6) {
+    if (bytes >= response.length()) {
       if (!read_callbacks_->connection().startSecureTransport()) {
         ENVOY_CONN_LOG(trace, "smtp_proxy filter: cannot switch to tls", read_callbacks_->connection(), bytes);
-      }
-
-      // Switch to TLS has been completed.
+      } else {
+        // Switch to TLS has been completed.
       // Signal to the decoder to stop processing the current message (SSLRequest).
       // Because Envoy terminates SSL, the message was consumed and should not be
       // passed to other filters in the chain.
       incTlsTerminatedSessions();
       ENVOY_CONN_LOG(trace, "smtp_proxy filter: switched to tls", read_callbacks_->connection(), bytes);
       return false;
+      }
     }
     return true;
   });
@@ -56,16 +53,16 @@ bool SmtpFilter::onStartTlsCommand() {
   return false;
 }
 
-bool SmtpFilter::rejectOutOfOrderCommand() {
+bool SmtpFilter::sendReplyDownstream(absl::string_view response) {
   Buffer::OwnedImpl buffer;
-  buffer.add("503 Bad sequence of commands\n");
+  buffer.add(response);
   if (read_callbacks_->connection().state() != Network::Connection::State::Open) {
     ENVOY_LOG(warn, "downstream connection is closed or closing");
     return true;
   }
   read_callbacks_->connection().addBytesSentCallback([=](uint64_t bytes) -> bool {
-    // Wait until 28 bytes long "503 Bad sequence of commands" has been sent.
-    if (bytes >= 28) {
+    // Wait until response has been sent.
+    if (bytes >= response.length()) {
       return false;
     }
     return true;
@@ -73,6 +70,10 @@ bool SmtpFilter::rejectOutOfOrderCommand() {
 
   read_callbacks_->connection().write(buffer, false);
   return false;
+}
+
+bool SmtpFilter::isTlsTerminationEnbaled() {
+    return config_->terminate_tls_;
 }
 
 void SmtpFilter::incTlsTerminatedSessions() {
@@ -85,9 +86,24 @@ void SmtpFilter::incSmtpTransactions() {
 void SmtpFilter::incSmtpTransactionsAborted() {
   config_->stats_.smtp_transactions_aborted_.inc();
 }
-void SmtpFilter::incSmtpSessions() {
-  config_->stats_.smtp_sessions_.inc();
+void SmtpFilter::incSmtpSessionRequests() {
+  config_->stats_.smtp_session_requests_.inc();
   
+}
+void SmtpFilter::incSmtpSessionsCompleted() {
+  config_->stats_.smtp_sessions_completed_.inc();
+}
+
+void SmtpFilter::incSmtpConnectionEstablishmentErrors() {
+  config_->stats_.smtp_connection_establishment_errors_.inc();
+}
+
+void SmtpFilter::incSmtp4xxErrors() {
+  config_->stats_.smtp_errors_4xx_.inc();
+}
+
+void SmtpFilter::incSmtp5xxErrors() {
+  config_->stats_.smtp_errors_5xx_.inc();
 }
 
 // onData method processes payloads sent by downstream client.

@@ -19,32 +19,17 @@ class DecoderCallbacks {
 public:
   virtual ~DecoderCallbacks() = default;
 
-//   virtual void incMessagesFrontend() PURE;
-//   virtual void incMessagesUnknown() PURE;
-
-  virtual void incTlsTerminatedSessions() PURE;
   virtual void incSmtpTransactions() PURE;
   virtual void incSmtpTransactionsAborted() PURE;
-  virtual void incSmtpSessions() PURE;
-  // virtual void incSessionsUnencrypted() PURE;
-
-//   enum class StatementType { Insert, Delete, Select, Update, Other, Noop };
-//   virtual void incStatements(StatementType) PURE;
-
-//   virtual void incTransactions() PURE;
-//   virtual void incTransactionsCommit() PURE;
-//   virtual void incTransactionsRollback() PURE;
-
-//   enum class NoticeType { Warning, Notice, Debug, Info, Log, Unknown };
-//   virtual void incNotices(NoticeType) PURE;
-
-  enum class ErrorType { Error, Fatal, Panic, Unknown };
-  // virtual void incErrors(ErrorType) PURE;
-
-  // virtual void processQuery(const std::string&) PURE;
-
-  virtual bool onStartTlsCommand() PURE;
-  virtual bool rejectOutOfOrderCommand() PURE;
+  virtual void incSmtpSessionRequests() PURE;  
+  virtual void incSmtpConnectionEstablishmentErrors() PURE;  
+  virtual void incSmtpSessionsCompleted() PURE;  
+  virtual void incTlsTerminatedSessions() PURE;
+  virtual void incSmtp4xxErrors() PURE;
+  virtual void incSmtp5xxErrors() PURE;
+  virtual bool onStartTlsCommand(absl::string_view) PURE;
+  virtual bool sendReplyDownstream(absl::string_view) PURE;
+  virtual bool isTlsTerminationEnbaled() PURE;
 
 };
 
@@ -76,14 +61,12 @@ public:
   DecoderImpl(DecoderCallbacks* callbacks) : callbacks_(callbacks) { }
 
   Result onData(Buffer::Instance& data, bool upstream) override;
-  //Result parseResponse (Buffer::Instance& data) override;
   SmtpSession& getSession() override { return session_; }
 
-  std::string getMessage() { return message_; }
 
   bool isSessionEncrypted() const { return session_encrypted_; }
 
-  const char *StateStrings[14] = {
+  const char *StateStrings[12] = {
       "SESSION_INIT",
       "SESSION_REQUEST",
       "SESSION_IN_PROGRESS",
@@ -93,11 +76,9 @@ public:
       "TRANSACTION_IN_PROGRESS",
       "TRANSACTION_ABORT_REQUEST",
       "TRANSACTION_ABORTED",
+      "MAIL_DATA_REQUEST",
       "END_OF_MAIL_INDICATION_RECEIVECD",
       "TRANSACTION_COMPLETED",
-      "STARTTLS_REQ_RECEIVED",
-      "SESSION_ENCRYPTED",
-      "ERROR"
   };
 protected:
 
@@ -108,12 +89,17 @@ protected:
   DecoderCallbacks* callbacks_{};
   SmtpSession session_{};
 
-//   // The following fields store result of message parsing.
-//   char command_{'-'};
-   std::string message_;
-   uint32_t message_len_{};
-
   bool session_encrypted_{false}; // tells if exchange is encrypted
+  inline static const char* smtpHeloCommand = "HELO";
+  inline static const char* smtpEhloCommand = "EHLO";
+  inline static const char* smtpMailCommand = "MAIL";
+  inline static const char* smtpDataCommand = "DATA";
+  inline static const char* smtpQuitCommand = "QUIT";
+  inline static const char* smtpRsetCommand = "RSET";
+  inline static const char* startTlsCommand = "STARTTLS";
+  inline static const char* outOfOrderCommandResponse = "503 Bad sequence of commands\r\n";
+  inline static const char* readyToStartTlsResponse = "220 Ready to start TLS\r\n";
+  inline static const char* failedToStartTlsResponse = "454 TLS not available due to temporary reason\r\n";
 
 };
 

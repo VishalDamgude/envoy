@@ -24,9 +24,6 @@ public:
     MAIL_DATA_REQUEST = 9,
     END_OF_MAIL_INDICATION_RECEIVECD = 10,
     TRANSACTION_COMPLETED = 11,
-    STARTTLS_REQ_RECEIVED = 12,
-    SESSION_ENCRYPTED = 13,
-    ERROR = 14,
   };
 
   void setState(SmtpSession::State state) { state_ = state; }

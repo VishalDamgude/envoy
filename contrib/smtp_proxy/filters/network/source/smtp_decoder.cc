@@ -11,20 +11,10 @@ namespace SmtpProxy {
 
 Decoder::Result DecoderImpl::onData(Buffer::Instance& data, bool upstream) {
   const std::string message = data.toString();
-  ENVOY_LOG(debug, "smtp_proxy: received message: ", message);
-  ENVOY_LOG(debug, "upstream: ", upstream);
-  // ENVOY_LOG(debug, "current state: ", static_cast<int32_t>(session_.getState()));
-
+  ENVOY_LOG(info, "smtp_proxy: received message: ", message);
   std::cout << message << "\n";
-  std::cout << "upstream: " <<  upstream << "\n";
   std::cout << "current state: " << StateStrings[static_cast<int>(session_.getState())] << "\n";
   Decoder::Result result = Decoder::Result::ReadyForNext;
-  // std::string command;
-  // DecodeStatus status = BufferHelper::readStringBySize(data, 4, command);
-  // if (!status)
-  // {
-  //   ENVOY_LOG(debug, "smtp_proxy: decoded command: ", command);
-  // }
   if(upstream)
   {
     std::cout << "received response from upstream" << "\n";
@@ -39,53 +29,67 @@ Decoder::Result DecoderImpl::onData(Buffer::Instance& data, bool upstream) {
 
 
 Decoder::Result DecoderImpl::parseCommand(Buffer::Instance& data) {
-  ENVOY_LOG(trace, "smtp_proxy: decoding {} bytes", data.length());
+  ENVOY_LOG(debug, "smtp_proxy: decoding {} bytes", data.length());
 
-  std::string command;
+  // std::string command;
   Buffer::OwnedImpl message;
   message.add(data);
-  uint32_t message_len = message.length();
-  absl::string_view cmd_str = StringUtil::trim(message.toString());
-  // cmd_str = StringUtil::trim(cmd_str);
-  std::cout << "command string : " << cmd_str << " length: " << cmd_str.length() << "\n"; 
-  std::cout << "message len: " << message_len << "\n";
+
+  if(message.length() < 4) {
+    //Message size is not sufficient to parse.
+    return Decoder::Result::ReadyForNext;
+  }
+  
+  // absl::string_view cmd_str = StringUtil::trim(message.toString());
+  // std::cout << "command string : " << cmd_str << " length: " << cmd_str.length() << "\n"; 
+
   switch (session_.getState()) {
     case SmtpSession::State::SESSION_INIT: {
-      if(message.startsWith("EHLO")) {
+      if( message.startsWith(smtpEhloCommand) || message.startsWith(smtpHeloCommand)) {
         session_.setState(SmtpSession::State::SESSION_REQUEST);
       }
       break;
     }
     case SmtpSession::State::SESSION_IN_PROGRESS: {
 
-      if(!session_encrypted_ && message.startsWith(BufferHelper::startTlsCommand))
+      if(message.startsWith(startTlsCommand))
       {
-        if(!callbacks_->onStartTlsCommand()) {
-          // callback returns false if connection is switched to tls i.e. tls termination is successful.
-          session_encrypted_ = true;
+        if(session_encrypted_)
+          break;
+        if(callbacks_->isTlsTerminationEnbaled())
+        {
+          //If TLS termination is enabled in config, proceed to switch transport socket to tls.
+          if(!callbacks_->onStartTlsCommand(readyToStartTlsResponse)) {
+            // callback returns false if connection is switched to tls i.e. tls termination is successful.
+            session_encrypted_ = true;
+          } else {
+            //error while switching transport socket to tls.
+            callbacks_->sendReplyDownstream(failedToStartTlsResponse);
+          } 
           return Decoder::Result::Stopped;
         } else {
           return Decoder::Result::ReadyForNext;
-        } 
-      } else if(message.startsWith("MAIL")) {
+        }
+        
+      } else if(message.startsWith(smtpMailCommand)) {
         session_.setState(SmtpSession::State::TRANSACTION_REQUEST);
-      } else if(message.startsWith("QUIT")) {
+      } else if(message.startsWith(smtpQuitCommand)) {
         session_.setState(SmtpSession::State::SESSION_TERMINATION_REQUEST);
       }
       break;
     }
     case SmtpSession::State::TRANSACTION_IN_PROGRESS: {
-      if(message.startsWith("DATA")) {
+      if(message.startsWith(smtpDataCommand)) {
         session_.setState(SmtpSession::State::MAIL_DATA_REQUEST);
-      } else if(message.startsWith("RSET")) {
+      } else if(message.startsWith(smtpRsetCommand) || message.startsWith(smtpEhloCommand) || message.startsWith(smtpHeloCommand)) {
         session_.setState(SmtpSession::State::TRANSACTION_ABORT_REQUEST);
       }
       break;
     }
     case SmtpSession::State::TRANSACTION_COMPLETED: {
-      if(message.startsWith("QUIT")) {
+      if(message.startsWith(smtpQuitCommand)) {
         session_.setState(SmtpSession::State::SESSION_TERMINATION_REQUEST);
-      } else if(message.startsWith("MAIL")) {
+      } else if(message.startsWith(smtpMailCommand)) {
         session_.setState(SmtpSession::State::TRANSACTION_REQUEST);
       }
       break;
@@ -93,10 +97,12 @@ Decoder::Result DecoderImpl::parseCommand(Buffer::Instance& data) {
     default:
       break;
   }
-  if(session_encrypted_ && message.startsWith(BufferHelper::startTlsCommand)) {
-      ENVOY_LOG(error, "smtp_proxy: received starttls when session is already encrypted.");
-      callbacks_->rejectOutOfOrderCommand();
-      return Decoder::Result::Stopped;
+
+  //Handle duplicate/out-of-order SMTP commands
+  if(session_encrypted_ && message.startsWith(startTlsCommand)) {
+    ENVOY_LOG(error, "smtp_proxy: received starttls when session is already encrypted.");
+    callbacks_->sendReplyDownstream(outOfOrderCommandResponse);
+    return Decoder::Result::Stopped;
   }
   return Decoder::Result::ReadyForNext;
 }
@@ -105,66 +111,69 @@ Decoder::Result DecoderImpl::parseCommand(Buffer::Instance& data) {
 Decoder::Result DecoderImpl::parseResponse(Buffer::Instance& data) {
   ENVOY_LOG(debug, "smtp_proxy: decoding response {} bytes", data.length());
 
-  // uint32_t response_code = 0;
   Decoder::Result result = Decoder::Result::ReadyForNext;
-  
+
+  if(data.length() < 3) {
+    //Minimum 3 byte response code needed to parse response from server.
+    return result;
+  }
   std::string response;
   response.assign(std::string(static_cast<char*>(data.linearize(3)), 3));
 
-  // const char* response_code_str = static_cast<const char*>(mem2);
-  // uint16_t* response_code = static_cast<uint16_t*>(data.linearize(3));
-  // if (BufferHelper::readUint24(data, response_code) != DecodeStatus::Success) {
-  //   std::cout<< "response code 3 bytes: " << response_code << "\n";
-  //   ENVOY_LOG(debug, "error parsing response code");
-  //   // return DecodeStatus::Failure;
-  //   result = Decoder::Result::ReadyForNext;
-  //   return result;
-  // }
   uint16_t response_code = stoi(response);
-  std::cout<< "response code 3 bytes: " << response << "\n";
   std::cout<< "response code 3 bytes: " << response_code << "\n";
   
   switch (session_.getState()) {
 
+    case SmtpSession::State::SESSION_INIT: {
+      if(response_code == 554) {
+        callbacks_->incSmtpConnectionEstablishmentErrors();
+      }
+      break;
+    }
+
     case SmtpSession::State::SESSION_REQUEST: {
-      if(response_code >= 200 && response_code <= 299) {
+      if(response_code == 250) {
         session_.setState(SmtpSession::State::SESSION_IN_PROGRESS);
       }
       break;
     }
 
     case SmtpSession::State::TRANSACTION_REQUEST: {
-      if(response_code >= 200 && response_code <= 299) {
+      if(response_code == 250) {
         session_.setState(SmtpSession::State::TRANSACTION_IN_PROGRESS);
       }
       break;
     }
     case SmtpSession::State::MAIL_DATA_REQUEST: {
-      if(response_code >= 200 && response_code <= 299) {
+      if(response_code == 250) {
         callbacks_->incSmtpTransactions();
         session_.setState(SmtpSession::State::TRANSACTION_COMPLETED);
       }
       break;
     }
     case SmtpSession::State::TRANSACTION_ABORT_REQUEST: {
-      if(response_code >= 200 && response_code <= 299) {
+      if(response_code == 250) {
         callbacks_->incSmtpTransactionsAborted();
         session_.setState(SmtpSession::State::SESSION_IN_PROGRESS);
       }
       break;
     }
     case SmtpSession::State::SESSION_TERMINATION_REQUEST: {
-      if(response_code >= 200 && response_code <= 299) {
+      if(response_code == 221) {
         session_.setState(SmtpSession::State::SESSION_TERMINATED);
-        callbacks_->incSmtpSessions();
+        callbacks_->incSmtpSessionsCompleted();
       }
       break;
     }
     default:
       result = Decoder::Result::ReadyForNext;
   }
-  // std::cout<< "draining data from response \n";
-  // data.drain(data.length());
+  if(response_code >= 400 && response_code <= 499) {
+    callbacks_->incSmtp4xxErrors();
+  } else if(response_code >= 500 && response_code <= 599) {
+    callbacks_->incSmtp5xxErrors();
+  }
   return result;
 }
 

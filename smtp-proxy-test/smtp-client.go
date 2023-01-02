@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	// "crypto/tls"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -178,13 +178,13 @@ func main() {
 	err = client.Hello("localhost")
 
 	// //STARTTLS
-	// err = client.StartTLS(&tls.Config{
-	// 	InsecureSkipVerify: true,
-	// })
+	err = client.StartTLS(&tls.Config{
+		InsecureSkipVerify: true,
+	})
 
-	// TLS config
+	//TLS config
 	// tlsconfig := &tls.Config{
-	// 	ServerName: "localhost",
+	// 	ServerName: "myfreshworks.com",
 	// }
 
 
@@ -193,14 +193,14 @@ func main() {
 	// 	fmt.Println(err)
 	// }
 
-	// cs, ok := client.TLSConnectionState()
-	// if !ok {
-	// 	fmt.Println("TLSConnectionState returned ok == false; want true")
-	// 	return
-	// }
-	// if cs.Version == 0 || !cs.HandshakeComplete {
-	// 	fmt.Println("ConnectionState = expect non-zero Version and HandshakeComplete", cs)
-	// }
+	cs, ok := client.TLSConnectionState()
+	if !ok {
+		fmt.Println("TLSConnectionState returned ok == false; want true")
+		return
+	}
+	if cs.Version == 0 || !cs.HandshakeComplete {
+		fmt.Println("ConnectionState = expect non-zero Version and HandshakeComplete", cs)
+	}
 
 	// AUTH
 	err = client.Auth(smtp.PlainAuth("", "username", "password", "localhost"))

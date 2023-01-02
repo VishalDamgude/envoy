@@ -17,11 +17,14 @@ namespace SmtpProxy {
  * All SMTP proxy stats. @see stats_macros.h
  */
 #define ALL_SMTP_PROXY_STATS(COUNTER)                                                             \
-  COUNTER(smtp_sessions)                                                                          \
+  COUNTER(smtp_session_requests)                                                                          \
+  COUNTER(smtp_connection_establishment_errors)                                                                          \
+  COUNTER(smtp_sessions_completed)                                                                          \
   COUNTER(smtp_transactions)                                                                      \
   COUNTER(smtp_transactions_aborted)                                                                      \
   COUNTER(tls_terminated_sessions)																	                              \
-  COUNTER(decoder_errors)																	                                        \
+  COUNTER(smtp_errors_4xx)																	                                        \
+  COUNTER(smtp_errors_5xx)																	                                        \
 
 
 /**
@@ -72,12 +75,17 @@ public:
   DecoderPtr createDecoder(DecoderCallbacks* callbacks);
   SmtpSession& getSession() { return decoder_->getSession(); }
 
-  bool onStartTlsCommand() override;
-  bool rejectOutOfOrderCommand() override;
+  void incSmtpSessionRequests() override;
+  void incSmtpConnectionEstablishmentErrors() override;
   void incTlsTerminatedSessions() override;
   void incSmtpTransactions() override;
   void incSmtpTransactionsAborted() override;
-  void incSmtpSessions() override;
+  void incSmtpSessionsCompleted() override;
+  void incSmtp4xxErrors() override;
+  void incSmtp5xxErrors() override;
+  bool onStartTlsCommand(absl::string_view response) override;
+  bool sendReplyDownstream(absl::string_view response) override;
+  bool isTlsTerminationEnbaled() override;
 
 private:
   Network::FilterStatus onCommand(Buffer::Instance& buf);

@@ -8,7 +8,6 @@ namespace Extensions {
 namespace NetworkFilters {
 namespace SmtpProxy {
 
-const std::string BufferHelper::startTlsCommand = "STARTTLS";
 
 bool BufferHelper::endOfBuffer(Buffer::Instance& buffer) { return buffer.length() == 0; }
 
@@ -63,17 +62,6 @@ DecodeStatus BufferHelper::readUint32(Buffer::Instance& buffer, uint32_t& val) {
     // buffer underflow
     return DecodeStatus::Failure;
   }
-}
-
-DecodeStatus BufferHelper::readString(Buffer::Instance& buffer, std::string& str) {
-  char end = SMTP_STR_END;
-  ssize_t index = buffer.search(&end, sizeof(end), 0);
-  if (index == -1) {
-    return DecodeStatus::Failure;
-  }
-  str.assign(static_cast<char*>(buffer.linearize(index)), index);
-  buffer.drain(index + 1);
-  return DecodeStatus::Success;
 }
 
 DecodeStatus BufferHelper::readStringBySize(Buffer::Instance& buffer, size_t len,
