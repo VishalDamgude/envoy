@@ -29,7 +29,6 @@ public:
   virtual void incSmtp5xxErrors() PURE;
   virtual bool onStartTlsCommand(absl::string_view) PURE;
   virtual bool sendReplyDownstream(absl::string_view) PURE;
-  virtual bool isTlsTerminationEnbaled() PURE;
 
 };
 

@@ -39,12 +39,10 @@ class SmtpFilterConfig {
 public:
   struct SmtpFilterConfigOptions {
     std::string stats_prefix_;
-	  bool terminate_tls_;
   };
   SmtpFilterConfig(const SmtpFilterConfigOptions& config_options, Stats::Scope& scope);
   const SmtpProxyStats& stats() { return stats_; }
 
-  bool terminate_tls_{false};
   Stats::Scope& scope_;
   SmtpProxyStats stats_;
 
@@ -85,7 +83,6 @@ public:
   void incSmtp5xxErrors() override;
   bool onStartTlsCommand(absl::string_view response) override;
   bool sendReplyDownstream(absl::string_view response) override;
-  bool isTlsTerminationEnbaled() override;
 
 private:
   Network::FilterStatus onCommand(Buffer::Instance& buf);

@@ -56,21 +56,15 @@ Decoder::Result DecoderImpl::parseCommand(Buffer::Instance& data) {
       {
         if(session_encrypted_)
           break;
-        if(callbacks_->isTlsTerminationEnbaled())
-        {
-          //If TLS termination is enabled in config, proceed to switch transport socket to tls.
-          if(!callbacks_->onStartTlsCommand(readyToStartTlsResponse)) {
-            // callback returns false if connection is switched to tls i.e. tls termination is successful.
-            session_encrypted_ = true;
-          } else {
-            //error while switching transport socket to tls.
-            callbacks_->sendReplyDownstream(failedToStartTlsResponse);
-          } 
-          return Decoder::Result::Stopped;
-        } else {
-          return Decoder::Result::ReadyForNext;
-        }
         
+        if(!callbacks_->onStartTlsCommand(readyToStartTlsResponse)) {
+          // callback returns false if connection is switched to tls i.e. tls termination is successful.
+          session_encrypted_ = true;
+        } else {
+          //error while switching transport socket to tls.
+          callbacks_->sendReplyDownstream(failedToStartTlsResponse);
+        } 
+        return Decoder::Result::Stopped;  
       } else if(message.startsWith(smtpMailCommand)) {
         session_.setState(SmtpSession::State::TRANSACTION_REQUEST);
       } else if(message.startsWith(smtpQuitCommand)) {

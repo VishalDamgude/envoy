@@ -11,7 +11,7 @@ namespace NetworkFilters {
 namespace SmtpProxy {
 
 SmtpFilterConfig::SmtpFilterConfig(const SmtpFilterConfigOptions& config_options, Stats::Scope& scope)
-  : terminate_tls_(config_options.terminate_tls_), scope_{scope}, 
+  : scope_{scope}, 
     stats_(generateStats(config_options.stats_prefix_, scope)) {
    std::cout << config_options.stats_prefix_ << "\n";
 } 
@@ -70,10 +70,6 @@ bool SmtpFilter::sendReplyDownstream(absl::string_view response) {
 
   read_callbacks_->connection().write(buffer, false);
   return false;
-}
-
-bool SmtpFilter::isTlsTerminationEnbaled() {
-    return config_->terminate_tls_;
 }
 
 void SmtpFilter::incTlsTerminatedSessions() {

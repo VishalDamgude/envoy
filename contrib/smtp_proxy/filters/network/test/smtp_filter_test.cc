@@ -36,4 +36,5 @@ TEST_F(SmtpFilterTest, NewSessionStatsTest) {
   initialize();
 
   EXPECT_EQ(Envoy::Network::FilterStatus::Continue, filter_->onNewConnection());
+  EXPECT_EQ(1, config_->stats().smtp_session_requests.value());
 }
